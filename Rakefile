@@ -97,7 +97,7 @@ task :update, :version do |_, args|
   end.to_h
 
   MAPPINGS = {
-    'highcharts.src.js'           => 'highcharts.js',
+    'highcharts.src.js'           => 'highcharts/highcharts.js',
     'highcharts-more.src.js'      => 'highcharts/highcharts-more.js',
     'highcharts-3d.src.js'        => 'highcharts/highcharts-3d.js'
   }
