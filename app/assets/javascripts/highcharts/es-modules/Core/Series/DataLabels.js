@@ -1,6 +1,6 @@
 /* *
  *
- *  (c) 2010-2020 Torstein Honsi
+ *  (c) 2010-2021 Torstein Honsi
  *
  *  License: www.highcharts.com/license
  *
@@ -10,11 +10,16 @@
 'use strict';
 import A from '../Animation/AnimationUtilities.js';
 var getDeferredAnimation = A.getDeferredAnimation;
+import F from '../FormatUtilities.js';
+var format = F.format;
 import H from '../Globals.js';
-var noop = H.noop, seriesTypes = H.seriesTypes;
-import CartesianSeries from './CartesianSeries.js';
+var noop = H.noop;
+import palette from '../Color/Palette.js';
+import Series from '../Series/Series.js';
+import SeriesRegistry from './SeriesRegistry.js';
+var seriesTypes = SeriesRegistry.seriesTypes;
 import U from '../Utilities.js';
-var arrayMax = U.arrayMax, clamp = U.clamp, defined = U.defined, extend = U.extend, fireEvent = U.fireEvent, format = U.format, isArray = U.isArray, merge = U.merge, objectEach = U.objectEach, pick = U.pick, relativeLength = U.relativeLength, splat = U.splat, stableSort = U.stableSort;
+var arrayMax = U.arrayMax, clamp = U.clamp, defined = U.defined, extend = U.extend, fireEvent = U.fireEvent, isArray = U.isArray, merge = U.merge, objectEach = U.objectEach, pick = U.pick, relativeLength = U.relativeLength, splat = U.splat, stableSort = U.stableSort;
 /**
  * Callback JavaScript function to format the data label as a string. Note that
  * if a `format` is defined, the format takes precedence and the formatter is
@@ -172,7 +177,7 @@ H.distribute = function (boxes, len, maxDistance) {
  * @return {void}
  * @fires Highcharts.Series#event:afterDrawDataLabels
  */
-CartesianSeries.prototype.drawDataLabels = function () {
+Series.prototype.drawDataLabels = function () {
     var series = this, chart = series.chart, seriesOptions = series.options, seriesDlOptions = seriesOptions.dataLabels, points = series.points, pointOptions, hasRendered = series.hasRendered || 0, dataLabelsGroup, dataLabelAnim = seriesDlOptions.animation, animationConfig = seriesDlOptions.defer ?
         getDeferredAnimation(chart, dataLabelAnim, series) :
         { defer: 0, duration: 0 }, renderer = chart.renderer;
@@ -279,7 +284,7 @@ CartesianSeries.prototype.drawDataLabels = function () {
                     rotation = labelOptions.rotation;
                     if (!chart.styledMode) {
                         // Determine the color
-                        style.color = pick(labelOptions.color, style.color, series.color, '#000000');
+                        style.color = pick(labelOptions.color, style.color, series.color, palette.neutralColor100);
                         // Get automated contrast color
                         if (style.color === 'contrast') {
                             point.contrastColor = renderer.getContrast((point.color || series.color));
@@ -288,7 +293,7 @@ CartesianSeries.prototype.drawDataLabels = function () {
                                 labelDistance < 0 ||
                                 !!seriesOptions.stacking ?
                                 point.contrastColor :
-                                '#000000';
+                                palette.neutralColor100;
                         }
                         else {
                             delete point.contrastColor;
@@ -412,9 +417,13 @@ CartesianSeries.prototype.drawDataLabels = function () {
  * @param {boolean} [isNew]
  * @return {void}
  */
-CartesianSeries.prototype.alignDataLabel = function (point, dataLabel, options, alignTo, isNew) {
+Series.prototype.alignDataLabel = function (point, dataLabel, options, alignTo, isNew) {
     var series = this, chart = this.chart, inverted = this.isCartesian && chart.inverted, enabledDataSorting = this.enabledDataSorting, plotX = pick(point.dlBox && point.dlBox.centerX, point.plotX, -9999), plotY = pick(point.plotY, -9999), bBox = dataLabel.getBBox(), baseline, rotation = options.rotation, normRotation, negRotation, align = options.align, rotCorr, // rotation correction
-    isInsidePlot = chart.isInsidePlot(plotX, Math.round(plotY), inverted), 
+    isInsidePlot = chart.isInsidePlot(plotX, Math.round(plotY), {
+        inverted: inverted,
+        paneCoordinates: true,
+        series: series
+    }), 
     // Math.round for rounding errors (#2683), alignTo to allow column
     // labels (#2700)
     alignAttr, // the final position;
@@ -426,10 +435,17 @@ CartesianSeries.prototype.alignDataLabel = function (point, dataLabel, options, 
             (
             // If the data label is inside the align box, it is enough
             // that parts of the align box is inside the plot area
-            // (#12370)
-            options.inside && alignTo && chart.isInsidePlot(plotX, inverted ?
-                alignTo.x + 1 :
-                alignTo.y + alignTo.height - 1, inverted))), setStartPos = function (alignOptions) {
+            // (#12370). When stacking, it is always inside regardless
+            // of the option (#15148).
+            pick(options.inside, !!this.options.stacking) &&
+                alignTo &&
+                chart.isInsidePlot(plotX, inverted ?
+                    alignTo.x + 1 :
+                    alignTo.y + alignTo.height - 1, {
+                    inverted: inverted,
+                    paneCoordinates: true,
+                    series: series
+                }))), setStartPos = function (alignOptions) {
         if (enabledDataSorting && series.xAxis && !justify) {
             series.setDataLabelStartPos(point, dataLabel, isNew, isInsidePlot, alignOptions);
         }
@@ -487,7 +503,7 @@ CartesianSeries.prototype.alignDataLabel = function (point, dataLabel, options, 
         }
         else {
             setStartPos(alignTo); // data sorting
-            dataLabel.align(options, null, alignTo);
+            dataLabel.align(options, void 0, alignTo);
             alignAttr = dataLabel.alignAttr;
         }
         // Handle justify or crop
@@ -497,8 +513,14 @@ CartesianSeries.prototype.alignDataLabel = function (point, dataLabel, options, 
         }
         else if (pick(options.crop, true)) {
             visible =
-                chart.isInsidePlot(alignAttr.x, alignAttr.y) &&
-                    chart.isInsidePlot(alignAttr.x + bBox.width, alignAttr.y + bBox.height);
+                chart.isInsidePlot(alignAttr.x, alignAttr.y, {
+                    paneCoordinates: true,
+                    series: series
+                }) &&
+                    chart.isInsidePlot(alignAttr.x + bBox.width, alignAttr.y + bBox.height, {
+                        paneCoordinates: true,
+                        series: series
+                    });
         }
         // When we're using a shape, make it possible with a connector or an
         // arrow pointing to thie point
@@ -536,7 +558,7 @@ CartesianSeries.prototype.alignDataLabel = function (point, dataLabel, options, 
  *
  * @return {void}
  */
-CartesianSeries.prototype.setDataLabelStartPos = function (point, dataLabel, isNew, isInside, alignOptions) {
+Series.prototype.setDataLabelStartPos = function (point, dataLabel, isNew, isInside, alignOptions) {
     var chart = this.chart, inverted = chart.inverted, xAxis = this.xAxis, reversed = xAxis.reversed, labelCenter = inverted ? dataLabel.height / 2 : dataLabel.width / 2, pointWidth = point.pointWidth, halfWidth = pointWidth ? pointWidth / 2 : 0, startXPos, startYPos;
     startXPos = inverted ?
         alignOptions.x :
@@ -585,11 +607,11 @@ CartesianSeries.prototype.setDataLabelStartPos = function (point, dataLabel, isN
  * @param {boolean} [isNew]
  * @return {boolean|undefined}
  */
-CartesianSeries.prototype.justifyDataLabel = function (dataLabel, options, alignAttr, bBox, alignTo, isNew) {
+Series.prototype.justifyDataLabel = function (dataLabel, options, alignAttr, bBox, alignTo, isNew) {
     var chart = this.chart, align = options.align, verticalAlign = options.verticalAlign, off, justified, padding = dataLabel.box ? 0 : (dataLabel.padding || 0);
     var _a = options.x, x = _a === void 0 ? 0 : _a, _b = options.y, y = _b === void 0 ? 0 : _b;
     // Off left
-    off = alignAttr.x + padding;
+    off = (alignAttr.x || 0) + padding;
     if (off < 0) {
         if (align === 'right' && x >= 0) {
             options.align = 'left';
@@ -601,7 +623,7 @@ CartesianSeries.prototype.justifyDataLabel = function (dataLabel, options, align
         justified = true;
     }
     // Off right
-    off = alignAttr.x + bBox.width - padding;
+    off = (alignAttr.x || 0) + bBox.width - padding;
     if (off > chart.plotWidth) {
         if (align === 'left' && x <= 0) {
             options.align = 'right';
@@ -625,7 +647,7 @@ CartesianSeries.prototype.justifyDataLabel = function (dataLabel, options, align
         justified = true;
     }
     // Off bottom
-    off = alignAttr.y + bBox.height - padding;
+    off = (alignAttr.y || 0) + bBox.height - padding;
     if (off > chart.plotHeight) {
         if (verticalAlign === 'top' && y <= 0) {
             options.verticalAlign = 'bottom';
@@ -726,7 +748,7 @@ if (seriesTypes.pie) {
             }
         });
         // run parent method
-        CartesianSeries.prototype.drawDataLabels.apply(series);
+        Series.prototype.drawDataLabels.apply(series);
         data.forEach(function (point) {
             if (point.dataLabel) {
                 if (point.visible) { // #407, #2510
@@ -904,7 +926,7 @@ if (seriesTypes.pie) {
                     pick(pointDataLabelsOptions.connectorWidth, 1);
                 // Draw the connector
                 if (connectorWidth) {
-                    var isNew;
+                    var isNew = void 0;
                     connector = point.connector;
                     dataLabel = point.dataLabel;
                     if (dataLabel &&
@@ -927,7 +949,7 @@ if (seriesTypes.pie) {
                                     'stroke-width': connectorWidth,
                                     'stroke': (pointDataLabelsOptions.connectorColor ||
                                         point.color ||
-                                        '#666666')
+                                        palette.neutralColor60)
                                 });
                             }
                         }
@@ -957,7 +979,7 @@ if (seriesTypes.pie) {
     // TODO: depracated - remove it
     /*
     seriesTypes.pie.prototype.connectorPath = function (labelPos) {
-        var x = labelPos.x,
+        let x = labelPos.x,
             y = labelPos.y;
         return pick(this.options.dataLabels.softConnector, true) ? [
             'M',
@@ -1140,7 +1162,7 @@ if (seriesTypes.column) {
         options.align = pick(options.align, !inverted || inside ? 'center' : below ? 'right' : 'left');
         options.verticalAlign = pick(options.verticalAlign, inverted || inside ? 'middle' : below ? 'top' : 'bottom');
         // Call the parent method
-        CartesianSeries.prototype.alignDataLabel.call(this, point, dataLabel, options, alignTo, isNew);
+        Series.prototype.alignDataLabel.call(this, point, dataLabel, options, alignTo, isNew);
         // If label was justified and we have contrast, set it:
         if (options.inside && point.contrastColor) {
             dataLabel.css({

@@ -1,6 +1,6 @@
 /* *
  *
- *  (c) 2010-2020 Torstein Honsi
+ *  (c) 2010-2021 Torstein Honsi
  *
  *  License: www.highcharts.com/license
  *
@@ -8,6 +8,8 @@
  *
  * */
 'use strict';
+import Color from '../Color/Color.js';
+var color = Color.parse;
 import H from '../Globals.js';
 var win = H.win;
 import U from '../Utilities.js';
@@ -19,7 +21,7 @@ var isNumber = U.isNumber, objectEach = U.objectEach;
  * through {@link SVGElement#animate}.
  *
  * @example
- * var rect = renderer.rect(0, 0, 10, 10).add();
+ * let rect = renderer.rect(0, 0, 10, 10).add();
  * rect.animate({ width: 100 });
  *
  * @private
@@ -62,7 +64,8 @@ var Fx = /** @class */ (function () {
      * @return {void}
      */
     Fx.prototype.dSetter = function () {
-        var paths = this.paths, start = paths && paths[0], end = paths && paths[1], path = [], now = this.now || 0;
+        var paths = this.paths, start = paths && paths[0], end = paths && paths[1], now = this.now || 0;
+        var path = [];
         // Land on the final path without adjustment points appended in the ends
         if (now === 1 || !start || !end) {
             path = this.toD || [];
@@ -79,8 +82,8 @@ var Fx = /** @class */ (function () {
                     var startItem = startSeg[j];
                     var endItem = endSeg[j];
                     // Tween numbers
-                    if (typeof startItem === 'number' &&
-                        typeof endItem === 'number' &&
+                    if (isNumber(startItem) &&
+                        isNumber(endItem) &&
                         // Arc boolean flags
                         !(endSeg[0] === 'A' && (j === 4 || j === 5))) {
                         tweenSeg[j] = startItem + now * (endItem - startItem);
@@ -150,12 +153,12 @@ var Fx = /** @class */ (function () {
             function (step) {
                 setTimeout(step, 13);
             }, step = function () {
-            for (var i = 0; i < H.timers.length; i++) {
-                if (!H.timers[i]()) {
-                    H.timers.splice(i--, 1);
+            for (var i = 0; i < Fx.timers.length; i++) {
+                if (!Fx.timers[i]()) {
+                    Fx.timers.splice(i--, 1);
                 }
             }
-            if (H.timers.length) {
+            if (Fx.timers.length) {
                 requestAnimationFrame(step);
             }
         };
@@ -174,7 +177,7 @@ var Fx = /** @class */ (function () {
             this.pos = 0;
             timer.elem = this.elem;
             timer.prop = this.prop;
-            if (timer() && H.timers.push(timer) === 1) {
+            if (timer() && Fx.timers.push(timer) === 1) {
                 requestAnimationFrame(step);
             }
         }
@@ -191,7 +194,8 @@ var Fx = /** @class */ (function () {
      *         Returns `true` if animation continues.
      */
     Fx.prototype.step = function (gotoEnd) {
-        var t = +new Date(), ret, done, options = this.options, elem = this.elem, complete = options.complete, duration = options.duration, curAnim = options.curAnim;
+        var t = +new Date(), options = this.options, elem = this.elem, complete = options.complete, duration = options.duration, curAnim = options.curAnim;
+        var ret, done;
         if (elem.attr && !elem.element) { // #2616, element is destroyed
             ret = false;
         }
@@ -238,9 +242,9 @@ var Fx = /** @class */ (function () {
      *         they can be animated in parallel.
      */
     Fx.prototype.initPath = function (elem, fromD, toD) {
-        var shift, startX = elem.startX, endX = elem.endX, fullLength, i, start = fromD && fromD.slice(), // copy
-        end = toD.slice(), // copy
-        isArea = elem.isArea, positionFactor = isArea ? 2 : 1, reverse;
+        var startX = elem.startX, endX = elem.endX, end = toD.slice(), // copy
+        isArea = elem.isArea, positionFactor = isArea ? 2 : 1;
+        var shift, fullLength, i, reverse, start = fromD && fromD.slice(); // copy
         if (!start) {
             return [end, end];
         }
@@ -276,7 +280,8 @@ var Fx = /** @class */ (function () {
                 // For areas, the bottom path goes back again to the left, so we
                 // need to append a copy of the last point.
                 if (isArea) {
-                    arr.push(arr[arr.length - 1]);
+                    var z = arr.pop();
+                    arr.push(arr[arr.length - 1], z); // append point and the Z
                 }
             }
         }
@@ -295,7 +300,7 @@ var Fx = /** @class */ (function () {
                 // causing the middle two points to be sliced out, since an area
                 // path starts at left, follows the upper path then turns and
                 // follows the bottom back.
-                var segmentToAdd = arr[arr.length / positionFactor - 1].slice();
+                var segmentToAdd = arr[Math.floor(arr.length / positionFactor) - 1].slice();
                 // Disable the first control point of curve segments
                 if (segmentToAdd[0] === 'C') {
                     segmentToAdd[1] = segmentToAdd[5];
@@ -305,14 +310,14 @@ var Fx = /** @class */ (function () {
                     arr.push(segmentToAdd);
                 }
                 else {
-                    var lowerSegmentToAdd = arr[arr.length / positionFactor].slice();
+                    var lowerSegmentToAdd = arr[Math.floor(arr.length / positionFactor)].slice();
                     arr.splice(arr.length / 2, 0, segmentToAdd, lowerSegmentToAdd);
                 }
             }
         }
         // For sideways animation, find out how much we need to shift to get the
         // start path Xs to match the end path Xs.
-        if (startX && endX) {
+        if (startX && endX && endX.length) {
             for (i = 0; i < startX.length; i++) {
                 // Moving left, new points coming in on right
                 if (startX[i] === endX[0]) {
@@ -370,9 +375,19 @@ var Fx = /** @class */ (function () {
      * @return {void}
      */
     Fx.prototype.strokeSetter = function () {
-        this.elem.attr(this.prop, H.color(this.start).tweenTo(H.color(this.end), this.pos), null, true);
+        this.elem.attr(this.prop, color(this.start).tweenTo(color(this.end), this.pos), null, true);
     };
+    /* *
+     *
+     * Static properties
+     *
+     * */
+    Fx.timers = [];
     return Fx;
 }());
-H.Fx = Fx;
+/* *
+ *
+ *  Default Export
+ *
+ * */
 export default Fx;

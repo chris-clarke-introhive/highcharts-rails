@@ -1,14 +1,13 @@
 /* *
  *
- *  (c) 2010-2020 Torstein Honsi
+ *  (c) 2010-2021 Torstein Honsi
  *
  *  License: www.highcharts.com/license
  *
  *  !!!!!!! SOURCE GETS TRANSPILED BY TYPESCRIPT. EDIT TS FILE ONLY. !!!!!!!
  *
  * */
-import H from '../../Globals.js';
-var isFirefox = H.isFirefox, isMS = H.isMS, isWebKit = H.isWebKit, win = H.win;
+import AST from './AST.js';
 import SVGElement from '../SVG/SVGElement.js';
 import SVGRenderer from '../SVG/SVGRenderer.js';
 import U from '../../Utilities.js';
@@ -21,23 +20,6 @@ var HTMLRenderer = SVGRenderer;
 /* eslint-disable valid-jsdoc */
 // Extend SvgRenderer for useHTML option.
 extend(SVGRenderer.prototype, /** @lends SVGRenderer.prototype */ {
-    /**
-     * @private
-     * @function Highcharts.SVGRenderer#getTransformKey
-     *
-     * @return {string}
-     */
-    getTransformKey: function () {
-        return isMS && !/Edge/.test(win.navigator.userAgent) ?
-            '-ms-transform' :
-            isWebKit ?
-                '-webkit-transform' :
-                isFirefox ?
-                    'MozTransform' :
-                    win.opera ?
-                        '-o-transform' :
-                        '';
-    },
     /**
      * Create HTML text node. This is used by the VML renderer as well as the
      * SVG renderer through the useHTML option.
@@ -76,13 +58,13 @@ extend(SVGRenderer.prototype, /** @lends SVGRenderer.prototype */ {
         };
         // Text setter
         wrapper.textSetter = function (value) {
-            if (value !== element.innerHTML) {
+            if (value !== this.textStr) {
                 delete this.bBox;
                 delete this.oldTextWidth;
+                AST.setElementHTML(this.element, pick(value, ''));
+                this.textStr = value;
+                wrapper.doTransform = true;
             }
-            this.textStr = value;
-            element.innerHTML = pick(value, '');
-            wrapper.doTransform = true;
         };
         // Add setters for the element itself (#4938)
         if (isSVG) { // #4938, only for HTML within SVG
@@ -175,6 +157,7 @@ extend(SVGRenderer.prototype, /** @lends SVGRenderer.prototype */ {
                             }
                             // Create a HTML div and append it to the parent div
                             // to emulate the SVG group structure
+                            var parentGroupStyles = parentGroup.styles || {};
                             htmlGroup =
                                 parentGroup.div =
                                     parentGroup.div || createElement('div', cls ? { className: cls } : void 0, {
@@ -183,8 +166,8 @@ extend(SVGRenderer.prototype, /** @lends SVGRenderer.prototype */ {
                                         top: (parentGroup.translateY || 0) + 'px',
                                         display: parentGroup.display,
                                         opacity: parentGroup.opacity,
-                                        pointerEvents: (parentGroup.styles &&
-                                            parentGroup.styles.pointerEvents) // #5595
+                                        cursor: parentGroupStyles.cursor,
+                                        pointerEvents: parentGroupStyles.pointerEvents // #5595
                                         // the top group is appended to container
                                     }, htmlGroup || container);
                             // Shortcut
@@ -202,7 +185,10 @@ extend(SVGRenderer.prototype, /** @lends SVGRenderer.prototype */ {
                                 }(htmlGroup)),
                                 on: function () {
                                     if (parents[0].div) { // #6418
-                                        wrapper.on.apply({ element: parents[0].div }, arguments);
+                                        wrapper.on.apply({
+                                            element: parents[0].div,
+                                            onEvents: wrapper.onEvents
+                                        }, arguments);
                                     }
                                     return parentGroup;
                                 },

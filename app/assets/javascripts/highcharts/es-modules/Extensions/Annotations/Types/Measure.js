@@ -3,6 +3,7 @@
  *  !!!!!!! SOURCE GETS TRANSPILED BY TYPESCRIPT. EDIT TS FILE ONLY. !!!!!!!
  *
  * */
+'use strict';
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -133,8 +134,8 @@ var Measure = /** @class */ (function (_super) {
                 backgroundColor: 'none',
                 color: 'black',
                 borderWidth: 0,
-                dashStyle: 'dash',
-                overflow: 'none',
+                dashStyle: 'Dash',
+                overflow: 'allow',
                 align: 'left',
                 vertical: 'top',
                 crop: true,
@@ -149,7 +150,7 @@ var Measure = /** @class */ (function (_super) {
                 },
                 text: (formatter && formatter.call(this)) ||
                     Measure.calculations.defaultFormatter.call(this)
-            }, typeOptions.label));
+            }, typeOptions.label), void 0);
         }
     };
     /**

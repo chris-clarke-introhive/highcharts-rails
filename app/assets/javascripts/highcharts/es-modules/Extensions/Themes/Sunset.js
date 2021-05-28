@@ -1,6 +1,6 @@
 /* *
  *
- *  (c) 2010-2020 Highsoft AS
+ *  (c) 2010-2021 Highsoft AS
  *
  *  Author: Øystein Moseng
  *
@@ -12,9 +12,10 @@
  *  !!!!!!! SOURCE GETS TRANSPILED BY TYPESCRIPT. EDIT TS FILE ONLY. !!!!!!!
  *
  * */
+'use strict';
 import H from '../../Core/Globals.js';
-import U from '../../Core/Utilities.js';
-var setOptions = U.setOptions;
+import O from '../../Core/Options.js';
+var setOptions = O.setOptions;
 H.theme = {
     colors: ['#FDD089', '#FF7F79', '#A0446E', '#251535'],
     colorAxis: {

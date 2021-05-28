@@ -1,9 +1,9 @@
 /**
- * @license Highcharts JS v8.2.2 (2020-10-22)
+ * @license Highcharts JS v9.1.0 (2021-05-03)
  * @module highcharts/themes/sunset
  * @requires highcharts
  *
- * (c) 2009-2019 Highsoft AS
+ * (c) 2009-2021 Highsoft AS
  *
  * License: www.highcharts.com/license
  */
